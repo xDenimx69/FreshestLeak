@@ -3,7 +3,10 @@
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Card, CardContent } from '../../components/ui/Card'
+
+// Fix #1: import Card and CardContent separately
+import { Card } from '../../components/ui/Card'
+import { CardContent } from '../../components/ui/CardContent'
 import { Button } from '../../components/ui/Button'
 
 interface MovieDetail {
@@ -22,25 +25,25 @@ interface RdResult {
 }
 
 export default function MoviePage() {
-  const router = useRouter()
-  const { id } = router.query
+  const { query } = useRouter()
+  const id = typeof query.id === 'string' ? query.id : Array.isArray(query.id) ? query.id[0] : ''
 
   const [movie, setMovie] = useState<MovieDetail | null>(null)
   const [loadingMovie, setLoadingMovie] = useState(true)
 
-  // Real-Debrid states
+  // Real-Debrid state
   const [rdResults, setRdResults] = useState<RdResult[]>([])
   const [loadingRd, setLoadingRd] = useState(false)
   const [addingMagnet, setAddingMagnet] = useState<string | null>(null)
   const [addResponse, setAddResponse] = useState<any>(null)
 
-  // 1) Fetch TMDB detail
+  // 1) Load movie detail
   useEffect(() => {
     if (!id) return
     setLoadingMovie(true)
     fetch(`/api/movies/${id}`)
-      .then((r) => r.json())
-      .then((data) => setMovie(data))
+      .then(r => r.json())
+      .then(setMovie)
       .catch(console.error)
       .finally(() => setLoadingMovie(false))
   }, [id])
@@ -49,12 +52,12 @@ export default function MoviePage() {
   async function handleSearchRd() {
     if (!movie?.title) return
     setLoadingRd(true)
-    setAddResponse(null)           // clear any previous add
+    setAddResponse(null)
     try {
-      const r = await fetch(
+      const res = await fetch(
         `/api/rd-search?q=${encodeURIComponent(movie.title)}`
       )
-      const json = await r.json()
+      const json = await res.json()
       setRdResults(json.results || [])
     } catch (e) {
       console.error(e)
@@ -64,16 +67,16 @@ export default function MoviePage() {
     }
   }
 
-  // 3) Add a magnet to Real-Debrid
+  // 3) Add a magnet
   async function handleAddMagnet(magnet: string) {
     setAddingMagnet(magnet)
     try {
-      const r = await fetch(`/api/rd-add`, {
+      const res = await fetch(`/api/rd-add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ magnet }),
       })
-      const json = await r.json()
+      const json = await res.json()
       setAddResponse(json)
     } catch (e) {
       console.error(e)
@@ -123,24 +126,31 @@ export default function MoviePage() {
 
       {/* Real-Debrid Integration */}
       <section className="mb-8">
-        <Button onClick={handleSearchRd} disabled={loadingRd}>
+        <Button
+          onClick={handleSearchRd}
+          disabled={loadingRd}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+        >
           {loadingRd ? 'Searching…' : '🔍 Search Real-Debrid'}
         </Button>
 
-        {rdResults.map((r) => (
-          <Card key={r.magnet} className="mt-4">
-            <CardContent className="flex justify-between items-center">
-              <span>{r.title}</span>
+        <div className="space-y-4 mt-4">
+          {rdResults.map((r) => (
+            <Card key={r.magnet} className="flex justify-between items-center">
+              <CardContent className="flex-1">
+                <p className="font-medium">{r.title}</p>
+                <p className="text-sm text-gray-500 truncate">{r.magnet}</p>
+              </CardContent>
               <Button
-                variant="secondary"
                 onClick={() => handleAddMagnet(r.magnet)}
                 disabled={addingMagnet === r.magnet}
+                className="ml-4 bg-green-600 hover:bg-green-700 text-white"
               >
                 {addingMagnet === r.magnet ? 'Adding…' : '➕ Add'}
               </Button>
-            </CardContent>
-          </Card>
-        ))}
+            </Card>
+          ))}
+        </div>
 
         {addResponse && (
           <pre className="bg-white p-4 mt-4 rounded shadow-sm text-sm">
