@@ -1,4 +1,5 @@
 // pages/movies/[id].tsx
+
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -12,9 +13,7 @@ interface MovieDetail {
   overview: string
   release_date: string
   poster_path: string | null
-  backdrop_path: string | null
   genres: { id: number; name: string }[]
-  // add any other TMDB fields you reference below
 }
 
 interface RdResult {
@@ -45,7 +44,7 @@ export default function MoviePage() {
   const [hosts, setHosts] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  // 1) Fetch TMDB movie detail
+  // Fetch movie detail
   useEffect(() => {
     if (!id) return
     setLoadingMovie(true)
@@ -56,16 +55,18 @@ export default function MoviePage() {
       .finally(() => setLoadingMovie(false))
   }, [id])
 
-  // 2) Search Real-Debrid
+  // Search Real-Debrid
   async function handleSearchRd() {
     if (!movie?.title) return
     setLoadingRd(true)
     setError(null)
     setHosts([])
     try {
-      const r = await fetch(`/api/rd-search?q=${encodeURIComponent(movie.title)}`)
-      const j = await r.json()
-      setRdResults(j.results || [])
+      const res = await fetch(
+        `/api/rd-search?q=${encodeURIComponent(movie.title)}`
+      )
+      const json = await res.json()
+      setRdResults(json.results || [])
     } catch (e: any) {
       console.error(e)
       setError(e.message)
@@ -75,7 +76,7 @@ export default function MoviePage() {
     }
   }
 
-  // 3) Add a magnet & fetch hosts
+  // Add magnet & fetch hosts
   async function handleAddMagnet(magnet: string) {
     setAddingMagnet(magnet)
     setError(null)
@@ -87,9 +88,9 @@ export default function MoviePage() {
       })
       const addJson = await addRes.json()
       if (!addRes.ok) throw new Error(addJson.error || 'Add failed')
+      const torrentId = addJson.id
 
-      // now fetch hosts
-      const hostsRes = await fetch(`/api/rd-hosts?torrentId=${addJson.id}`)
+      const hostsRes = await fetch(`/api/rd-hosts?torrentId=${torrentId}`)
       const hostsJson: HostsResp = await hostsRes.json()
       if (hostsJson.error) throw new Error(hostsJson.error)
       setHosts(hostsJson.hosts || [])
@@ -105,14 +106,14 @@ export default function MoviePage() {
   if (!movie) return <p className="p-6">Movie not found.</p>
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
+    <div className="min-h-screen bg-gray-100 text-gray-900 p-6">
       <Link href="/" legacyBehavior>
         <a className="text-blue-600 hover:underline mb-4 block">
           ← Back to Search
         </a>
       </Link>
 
-      <h1 className="text-3xl font-bold mb-2">{movie.title}</h1>
+      <h1 className="text-4xl font-bold mb-2">{movie.title}</h1>
       <p className="text-gray-600 mb-4">
         Released: {new Date(movie.release_date).toLocaleDateString()}
       </p>
@@ -126,7 +127,15 @@ export default function MoviePage() {
         {loadingRd ? 'Searching…' : '🔍 Search Real-Debrid'}
       </Button>
 
-      {error && <p className="mt-4 text-red-600">Error: {error}</p>}
+      {loadingRd && (
+        <p className="mt-2 text-gray-600">🔄 Searching torrents…</p>
+      )}
+
+      {!loadingRd && rdResults.length === 0 && (
+        <p className="mt-2 text-gray-600">
+          No torrents found{movie.title ? ` for “${movie.title}”` : ''}.
+        </p>
+      )}
 
       <div className="space-y-4 mt-4">
         {rdResults.map((r) => (
@@ -144,6 +153,10 @@ export default function MoviePage() {
           </Card>
         ))}
       </div>
+
+      {addingMagnet && hosts.length === 0 && (
+        <p className="mt-2 text-gray-600">🔄 Fetching stream links…</p>
+      )}
 
       {hosts.length > 0 && (
         <section className="mt-6">
@@ -164,6 +177,8 @@ export default function MoviePage() {
           </ul>
         </section>
       )}
+
+      {error && <p className="mt-4 text-red-600">Error: {error}</p>}
     </div>
   )
 }

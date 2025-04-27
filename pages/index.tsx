@@ -2,6 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { Input } from '../components/ui/Input'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { CardContent } from '../components/ui/CardContent'
 
 interface Movie {
   id: number
@@ -22,8 +26,7 @@ export default function Home() {
       const res = await fetch(`/api/movies?query=${encodeURIComponent(query)}`)
       const data = await res.json()
       setResults(data.results || [])
-    } catch (err) {
-      console.error(err)
+    } catch {
       setResults([])
     } finally {
       setLoading(false)
@@ -35,24 +38,28 @@ export default function Home() {
       <h1 className="text-4xl font-bold mb-6">🎬 Movie Search</h1>
 
       <div className="flex gap-2 mb-4">
-        <input
-          className="flex-1 px-4 py-2 border rounded"
-          placeholder="Type a movie title…"
+        <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          placeholder="Type a movie title…"
+          className="flex-1"
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         />
-        <button
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-          onClick={handleSearch}
-          disabled={loading}
-        >
+        <Button onClick={handleSearch} disabled={loading}>
           {loading ? 'Searching…' : 'Search'}
-        </button>
+        </Button>
       </div>
 
-      {results.length === 0 && !loading && (
-        <p className="text-gray-600">Enter a title and hit Search to see results.</p>
+      {loading && (
+        <p className="text-gray-600">🔄 Loading results…</p>
+      )}
+
+      {!loading && results.length === 0 && (
+        <p className="text-gray-600">
+          {query
+            ? `No results found for “${query}.”`
+            : 'Enter a title and hit Search to begin.'}
+        </p>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
@@ -70,12 +77,12 @@ export default function Home() {
                   No Image
                 </div>
               )}
-              <div className="p-3">
+              <CardContent className="p-3">
                 <h2 className="text-lg font-semibold">{movie.title}</h2>
                 <p className="text-sm text-gray-500">
                   {new Date(movie.release_date).getFullYear()}
                 </p>
-              </div>
+              </CardContent>
             </a>
           </Link>
         ))}
