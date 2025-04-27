@@ -1,40 +1,53 @@
 // pages/api/rd-search.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 
+interface YtsMovie {
+  title: string
+  title_long: string
+  torrents: Array<{
+    hash: string
+    quality: string
+    type: string
+  }>
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const token = process.env.RD_TOKEN
-  if (!token) {
-    return res.status(500).json({ error: 'Missing RD_TOKEN in env' })
+  const rawQ = Array.isArray(req.query.q) ? req.query.q[0] : req.query.q
+  if (!rawQ) {
+    return res.status(400).json({ error: 'Missing ?q=' })
   }
 
-  // get & validate query
-  const { q } = req.query
-  const query = Array.isArray(q) ? q[0] : q
-  if (!query) {
-    return res.status(400).json({ error: 'Missing ?q= search term' })
+  // 1) Fetch from YTS
+  const url = `https://yts.mx/api/v2/list_movies.json?limit=20&query_term=${encodeURIComponent(
+    rawQ
+  )}`
+  const yRes = await fetch(url)
+  if (!yRes.ok) {
+    const txt = await yRes.text()
+    return res.status(yRes.status).json({ error: txt })
   }
+  const { data } = await yRes.json() as { data: { movies: YtsMovie[] } }
+  const movies = data.movies || []
 
-  try {
-    const rdRes = await fetch(
-      `https://api.real-debrid.com/rest/1.0/torrents/search/${encodeURIComponent(
-        query
-      )}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
+  // 2) Map to { title, magnet }
+  const results = movies.flatMap((m) =>
+    m.torrents.map((t) => {
+      // build a simple magnet URI with one tracker
+      const magnet = [
+        `xt=urn:btih:${t.hash}`,
+        `dn=${encodeURIComponent(m.title_long)}`,
+        // you can add more trackers here if you like
+        'tr=udp://tracker.openbittorrent.com:80',
+      ].join('&').replace(/&/g, '&')
+      return {
+        title: `${m.title} — ${t.quality}`,
+        magnet: `magnet:?${magnet}`,
+      }
+    })
+  )
 
-    if (!rdRes.ok) {
-      const text = await rdRes.text()
-      return res.status(rdRes.status).send(text)
-    }
-
-    const data = await rdRes.json()
-    // wrap in a `results` array for consistency
-    return res.status(200).json({ results: data })
-  } catch (err: any) {
-    console.error('rd-search error:', err)
-    return res.status(500).json({ error: err.message })
-  }
+  return res.status(200).json({ results })
 }
